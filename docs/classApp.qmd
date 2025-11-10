@@ -1,0 +1,246 @@
+---
+title: "Chicago Real Estate Explorer: Property Classes"
+author: Charles Threlkeld
+date: "11/7/2025"
+fig-cap-location: margin
+tbl-cap-location: margin
+format:
+  html:
+    code-fold: true
+---
+
+## Setting the Stage
+
+Imagine we are house hunting. We probably have a budget in mind and a general location. Let's keep our options pretty open at this point because we do not yet know what is available. Looking at listings can help, but if we give ourselves some time, other things might come onto the market or go off. If we get a handle on what is available in general, then we can have a better sense of what to expect.
+
+Let's take a couple of examples:
+1. We want to build a house from empty land in Ward 47.
+2. We want to live in Ward 47 or Ward 40, but we do not know which is more affordable.
+3. Are the types of housing the same between the two Wards? That is, will we have the same range available regardless of location?
+4. If we have a type of property we are interested in, then which Ward is a better fit?
+
+## Getting Our Bearings
+
+The city of Chicago is made up of [50 wards](https://app.chicagoelections.gov/documents/general/Citywide%20Ward%20Map%202022.pdf). These are geographic and political entities that elect their own alderpeople. Different wards have different characteristics since the representatives have made different decisions throughout their history.
+
+For our purposes, we want to know about the different types of housing available in the wards we are interested in. The Cook County Assessor's Office provides [data](https://github.com/ccao-data/ptaxsim?tab=readme-ov-file#database-installation) that can help us answer our questions. The city also provides [geographical data](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Wards-2023-/p293-wvbd/about_data) for the ward boundaries.
+
+Since we are only concerned (for now) with residential properties, we will limit our data to just residential properties, too.
+
+So, with all that said, let's think about our first scenario: We want to build a house from empty land in Ward 47.
+
+We'll go ahead and look at the data, and group it by property class:
+
+```{r}
+#| output: false
+library(bslib)
+library(here)
+library(knitr)
+library(ptaxsim)
+library(scales)
+library(shiny)
+library(sf)
+library(tidyverse)
+
+###############
+## Constants ##
+###############
+
+## See https://prodassets.cookcountyassessoril.gov/s3fs-public/form_documents/Class_codes_definitions_12.16.24.pdf
+residential_regression <- c(200, 201, 202, 203, 204, 205, 206, 207,
+                            208, 209, 210, 211, 212, 234, 278, 295)
+residential_nonregression <- c(200, 201, 213, 218, 219, 225)
+multi_family <- c(313, 314, 315, 318, 391, 396, 399)
+
+################
+## Parameters ##
+################
+
+year = 2023
+
+
+##################
+## Data Sources ##
+##################
+
+## See the Assessor's Office documentation above
+## This is a mapping of classes to descriptions
+classes <- read_csv(here("data/class-descriptions.csv"))
+
+## We grab the ward bounds from the City Data Portal
+ward_bounds <- st_read("https://data.cityofchicago.org/resource/k9yb-bpqx.geojson")
+
+## And finally, our database, also supplied by the CCAO
+ptaxsim_db_conn <- DBI::dbConnect(
+                            RSQLite::SQLite(),
+                            here("data/ptaxsim.db")
+                        )
+```
+
+```{r}
+#| label: tbl-ward-class-count
+#| tbl-cap: "Looks like we might be out of luck looking for residental property."
+#| output: true
+############
+## Script ##
+############
+
+ward_47_bound <-
+    ward_bounds |>
+    filter(ward == 47)
+
+residential_pins <- DBI::dbGetQuery(
+         ptaxsim_db_conn, str_glue("
+SELECT p.year, p.pin, p.class, p.av_certified, p.tax_code_num, pg.longitude, pg.latitude
+FROM pin p
+INNER JOIN pin_geometry pg
+ON substr(p.pin, 1, 10) = pg.pin10
+AND p.year = pg.year
+WHERE substr(p.tax_code_num, 1, 1) = '7'
+AND p.year = {year}
+")
+) |>
+    ## Map lat/lon to point
+    st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
+    ## Include only residental buildings
+    filter(class %in% residential_regression |  
+           class %in% residential_nonregression |
+           class %in% multi_family) |>
+    ## Apply residential multiplier
+    mutate(cash_value = av_certified * 10)
+
+ward_47 <- residential_pins |>
+    ## Subset to just properties in the ward
+    filter(as.logical(st_within(geometry, ward_47_bound))) |>
+    mutate(ward = 47)
+
+ward_47 |>
+    ## Go back to a data frame instead of gemoetry object
+    st_drop_geometry() |>
+    ## Group by class
+    group_by(class) |>
+    ## And get the number of each class
+    summarize(count = n()) |>
+    ## Add in the class English descriptions
+    merge(classes) |>
+    ## Finally, sort the results
+    arrange(desc(count)) |>
+    kable()
+```
+
+Well, it turns out we might be out of luck looking for a parcel of land to build a house on. Looking at this list, there's only one in the whole ward! Maybe we can target very narrowly, now and give the owner a call, but if they aren't selling, it's time to look elsewhere.
+
+## Where to Look
+
+Since it looks like we are not going to be building our dream house on an empty lot, let's expand our horizons a little bit. When buying a home that is already built, we are willing to live in Ward 47, just as before, but Ward 40 would be okay too. How can we tell which one is right for us?
+
+The first question will be: which is affordable?
+
+Let's plot a bar chart of the number of residential plots for price:
+
+```{r}
+#| label: fig-ward-comparison
+#| fig-cap: "Ward 40 looks like it has some cheaper options than Ward 47."
+#| warning: false
+ward_40_bound <-
+    ward_bounds |>
+    filter(ward == 40)
+
+ward_40 <-
+    residential_pins |>
+    filter(as.logical(st_within(geometry, ward_40_bound))) |>
+    mutate(ward = 40)
+
+combined_df <-
+    rows_append(ward_47, ward_40) |>
+    st_drop_geometry() |>
+    mutate_at("ward", as.factor)
+
+combined_df |>
+    ggplot(aes(cash_value, fill = ward)) +
+    geom_vline(xintercept = median(ward_47$cash_value),
+               color = "#00BFC4") +
+    geom_vline(xintercept = median(ward_40$cash_value),
+               color = "#F8766D") +
+    geom_histogram(bins = 50, alpha = 0.8, position = "dodge") +
+    scale_y_continuous("Number of Properties",
+                       labels = label_number_auto()) +
+    scale_x_continuous("Fair Cash Value",
+                       labels = label_currency(prefix="$"),
+                       n.breaks = 5,
+                       limits = c(0, 1000000)) +
+    labs(
+        title = str_glue("Cash Value Distribution of Wards 40 and 47 in 2023"))
+```
+
+Here we can see how many properties are valued in $50,000 bins between $0 and $1M. I've also included vertical lines for the median price of a property in each ward.
+
+Just at a glance, it looks like Ward 47 goes for a 50% markup compared to Ward 40! The median price is over $750k, compared to just over $500k for Ward 40. Looking at the highest bars, we can see that Ward 40 has the most properties valued somewhere near $400k, while Ward 47 has the most around $700k. We would save some serious cash if we took these summary numbers at face value!
+
+## Sorting Apples from Oranges
+
+But we might be comparing apples and oranges. If Ward 47 has mostly 6-unit apartment buildings and Ward 40 is largely single-family shotguns, we would be getting into totally different markets. So, let's look at our list from part one, but this time with both wards:
+
+```{r}
+#| label: tbl-ward-count-comparison
+#| tbl-cap: "These wards are pretty different! We will want to pare down to classes we are interested in before doing any big comparisons."
+#| output: true
+combined_df |>
+    group_by(class, ward) |>
+    summarize(count = n()) |>
+    pivot_wider(names_from = ward,
+                names_prefix = "Ward ",
+                values_from = count,
+                values_fill = 0) |>
+    merge(classes) |>
+    arrange(desc(pick(starts_with("Ward")))) |>
+    kable()
+```
+
+Okay! So the top line is pretty similar: We have about three thousand 2--6 unit apartment buildings in each ward. (Though a 2-unit apartment building is pretty different from a 6-unit building. This data doesn't differentiate.) In the next few lines, we see that Ward 47 is considerably newer with four times more single-family houses up to 62 years old and onlyr 1/4 as many older than that. Ward 40 also has double the number of smaller, single-story residences. These older, smaller properties are certainly skewing our numbers in the previous section.
+
+## Putting Things Back Together
+
+Looking above, we can see that if we are in the market for a single-story residence, we might want to look at Ward 40, but if we want a newer two-or-more story house, Ward 47 has a much larger stock.
+
+But let's imagine we want the most common type: a 2--6 unit apartment building. Let's compare the prices between the two wards, narrowing down to only this type:
+
+```{r}
+#| label: fig-class-comparison
+#| fig-cap: "Things narrowed down quite a bit, but Ward 47 still runs at a premium over Ward 40."
+#| warning: false
+
+ward_47_211 <-
+    ward_47 |>
+    filter(class == 211)
+
+ward_40_211 <-
+    ward_40 |>
+    filter(class == 211)
+
+combined_df |>
+    filter(class == 211) |>
+    ggplot(aes(cash_value, fill = ward)) +
+    geom_vline(xintercept = median(ward_47_211$cash_value),
+               color = "#00BFC4") +
+    geom_vline(xintercept = median(ward_40_211$cash_value),
+               color = "#F8766D") +
+    geom_histogram(bins = 50, alpha = 0.8, position = "dodge") +
+    scale_y_continuous("Number of Properties",
+                       labels = label_number_auto()) +
+    scale_x_continuous("Fair Cash Value",
+                       labels = label_currency(prefix="$"),
+                       n.breaks = 5,
+                       limits = c(0, 1000000)) +
+    labs(
+        title = str_glue("Cash Value Distribution of Wards 40 and 47 in 2023"))
+
+```
+
+This definitely tightens things up! Now the median difference is about $150k from $550k for Ward 40 to $700k for Ward 47. The most common bin is about $400k in Ward 40 and about $650k in Ward 47. We can not be sure what the cause is, but when comparing these similar building types, we definitely see a difference. Maybe it is the Brown Line Premium?
+
+If we are otherwise pretty neutral in preferences between about Ward 40 and Ward 47, it definitely looks like Ward 40 offers some better deals.
+
+## Try It Out!
+
+I have launched a website that allows you explore this data using whichever pair of wards you would like and whichever residential categories are of interest---even several at once! Just keep in mind that these data aren't guaranteed to be accurate to current market conditions, but should give a good sense for comparison of housing stock and relative market conditions, which are much more stable than actual prices.

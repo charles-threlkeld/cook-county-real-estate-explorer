@@ -1,0 +1,144 @@
+---
+title: "Chicago Real Estate Explorer: Tax History"
+author: Charles Threlkeld
+date: "11/6/2025"
+fig-cap-location: margin
+format:
+  html:
+    code-fold: true
+---
+
+## Setting the Stage
+
+Let's put ourselves in the shoes of a property owner in Cook County. Every year, taxes seem to go up! I still have the same house, but it gets more expensive just to live in this county!
+
+But why is that? Is it because my property is getting more valuable or because the powers that be are always raising taxes? And who are those powers that be?
+
+These are the questions that I'll explore here.
+
+## Getting A Baseline
+
+Let's start out by asking the simple question: are taxes actually going up? The [Cook County Assessor's Office](https://github.com/ccao-data) has put together a [package](https://github.com/ccao-data/ptaxsim) readily-accessible historical data. We can simply pull the data out of the database and plot it. We'll even color in the agencies responsible for each line item in the tax bill:
+
+```{r, out.width = "800px"}
+#| label: fig-tax-history
+#| fig-cap: "Taxes are definitely going up, and we can see who is responsible!"
+#| warning: false
+library(bslib)
+library(here)
+library(ptaxsim)
+library(shiny)
+library(tidyverse)
+
+ptaxsim_db_conn <- DBI::dbConnect(
+                            RSQLite::SQLite(),
+                            here("data/ptaxsim.db")
+                        )
+example_pin = "13132310180000"
+
+tax_bill(year_vec = 2006:2023, pin_vec = example_pin) |>
+    ggplot(aes(x=year, y=final_tax, fill=agency_name)) +
+    geom_area() +
+    scale_y_continuous(labels=scales::dollar_format()) +
+    scale_fill_brewer("Agency", type="qual", palette = "Set3") +
+    labs(
+        x = "Year",
+        y = "$ Taxes",
+        title = "Taxed Amount by Year") +
+    theme(#legend.position = "bottom",
+          # legend.key.width = unit(0.1, "cm")),
+          legend.text = element_text(size = 6, lineheight = 121)) +
+    guides(color = guide_legend(ncol = 3, byrow = FALSE))
+```
+
+Aha! Just as we thought! It is getting more expensive to live here!
+
+It looks like the Board of Education and the City of Chicago are largely responsible. The Chicago School Finance Authority has gone by the wayside since 2009 or so, while the City of Chicago Library Fund and City of Chicago School Building & Improvement Fund are new since around 2008.
+
+## Assessed Value History
+
+But wait, while taxes are going up, property values might also be going up. We can see that taxes have gone up about 200% on this property the last couple of decades from $5000 in 2006 to about $15,000 in 2023. If we see what the assessed value of the home is, that will be a clue to whether it is the agencies increasing tax levies or simply following the property value.
+
+```{r, out.width = "800px"}
+#| label: fig-av-history
+#| fig-cap: "Property Value is going up too!"
+#| warning: false
+lookup_pin(2006:2023, c(example_pin)) |>
+    ggplot(aes(x = year, y = av * 10)) +
+    geom_line() +
+    scale_y_continuous(labels=scales::dollar_format()) +
+    labs(
+        x = "Year",
+        y = "$ Valuation",
+        title = "Assessed Value by Year")
+```
+
+Looks like (estimated) property values have gone up from about $500,000 to $700,000, an increase of about 40%. So, this doesn't account for the whole of the increase in taxes.
+
+## Tax Rate History
+
+To look at the levy history, let's look at the historical tax *rate*:
+
+$$\frac{Property Value}{Total Tax}$$
+
+```{r, out.width = "800px"}
+#| label: fig-tax-rate-history
+#| fig-cap: "By seeing the rate go up, we know that taxes are going up beyond property value increases."
+#| warning: false
+tax_bill(year_vec = 2006:2023,
+         pin_vec = example_pin) |>
+    group_by(year) |>
+    summarize(total_tax = sum(final_tax),
+              tax_rate = total_tax / mean(av * 10)) |>
+    ggplot(aes(x = year, y = tax_rate)) +
+    geom_line() +
+    scale_y_continuous(label = scales::label_percent()) +
+    labs(
+        x = "Year",
+        y = "Tax Collected as Percent of Assessed Value") +
+    theme(legend.position = "bottom")
+```
+
+Here we can see that the tax rate actually increases before the property assessment. This means that the tax levies were increased well before the property value went up.  In more recent years, the tax increases were more a factor of property values, and in farther back years, it was a function of increased levies.
+
+Thinking of this as a wealth tax on a very specific asset, we can see that the effective rate is still only 2%. That is up from 1%, but it will take a century to bleeding the asset dry.
+
+## Agency History
+
+Finally, let's look at the history of the taxes that the agencies are levying. This will give us a look at how the agencies have changed over time, and give us a look at who is responsible for the increases in taxes. Let's pin this to the 2006 values, which will let us see the percent change over time, that way the larger agencies do not crowd out the chart.
+
+```{r, out.width = "800px"}
+#| label: fig-agency-history
+#| fig-cap: "Looks like 2014 to 2019 were driving the City of Chicago levies, and the Board of Education is growing steadily."
+#| warning: false
+
+tax_code_vec <- lookup_tax_code(2006:2023,
+                                example_pin)
+agency <- lookup_agency(2006:2023,
+                        tax_code = tax_code_vec)
+baseline <- filter(agency, year == 2006)
+
+left_join(agency, baseline,
+          by = c("agency_name", "agency_major_type",
+                 "agency_minor_type", "tax_code", "agency_num"),
+          suffix = c(".float", ".baseline")) |>
+    mutate(fraction = agency_total_ext.float / agency_total_ext.baseline) |>
+    ggplot(aes(x = year.float, y = fraction, color = agency_name)) +
+    geom_line() +
+    scale_y_continuous(label = scales::label_percent()) +
+    labs(
+        x = "Year",
+        y = "% of Tax Dollars Collected vs 2006")
+```
+
+Note that these are the *total* levies of these agencies for each year. They are not specific to our property any more. But, we refer back to @fig-tax-history and see that two of the biggest contributors to the tax bill are the Board of Education and the City of Chicago. Here, we can see that the Board of Education has been growing fairly steadily for nearly 20 years. The City of Chicago hit something in 2015 that really spiked levies and it has been growing somewhat steadily since then. 
+
+The City of Chicago School Building & Improvement Fund looks like it's growing like crazy, but if we look back at @fig-tax-history again, we can see that it was hardly a factor at all in 2006, meaning that our very small baseline is showing large growth on a very small amount.
+
+## Wrapping Up
+
+Things are a little bit more complicated than this. Each taxing agency has a geographic area that it levies. Within that geographic area, it must collect its budget for the year. So only if *all other* properties were also up about 40% in these 18 years would we expect our own taxes to mimic the change in total levies.
+
+To approach this question, we would have to look at how our property of interest has changed in value relative to all other properties in the taxing district for each of the agencies involved. Quite a bit more involved!
+
+Further, we would need to know a lot more about tax policy history. The current multiplier is 0.1 for fair market value to assessed value for residental properties. Has that been constant during this time? It is 0.25 for commercial properties. Has that been constant? How are mixed-use building levied? This discussion just scratches the surface, but we are able to see that things have gotten more expensive for the owner(s) of this one specific property.
