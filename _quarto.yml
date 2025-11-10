@@ -1,0 +1,24 @@
+project:
+  type: book
+
+book:
+  title: "Cook County Real Estate Explorer"
+  author: "Charles Threlkeld"
+  date: "11/10/2025"
+  chapters:
+    - index.qmd
+    - taxApp.qmd
+    - classApp.qmd
+
+bibliography: references.bib
+
+format:
+  html:
+    theme:
+      - cosmo
+      - brand
+  pdf:
+    documentclass: scrreprt
+
+
+
