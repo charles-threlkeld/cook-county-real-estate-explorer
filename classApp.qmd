@@ -94,6 +94,10 @@ ward_47_bound <-
     ward_bounds |>
     filter(ward == 47)
 
+## All Chicago tax codes start with 7. So this is a quick way to get all
+## Chicago PINs and their centroids
+## See https://ccao-data.github.io/ptaxsim/articles/mapping.html
+## For the source of this shortcut
 ## residential_pins <- DBI::dbGetQuery(
 ##          ptaxsim_db_conn, str_glue("
 ## SELECT p.year, p.pin, p.class, p.av_certified, p.tax_code_num, pg.longitude, pg.latitude
@@ -105,20 +109,19 @@ ward_47_bound <-
 ## AND p.year = {year}
 ## ")
 ## ) |>
-##     ## Map lat/lon to point
-##     st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
+##     select(class, av_certified, longitude, latitude) |>
 ##     ## Include only residental buildings
 ##     filter(class %in% residential_regression |  
 ##            class %in% residential_nonregression |
 ##            class %in% multi_family)
 
-residential_pins <- st_read("data/residential_pins.shp") |>
-    ## Fix the shp column name changes
-    rename(av_certified = av_crtf) |>
-    rename(tax_code_num = tx_cd_n)
+residential_pins <- read_csv("data/residential_pins.csv") |>
+    mutate(av_certified = as.numeric(av_certified))
 
 residential_pins <-
     residential_pins |>
+    ## Map lat/lon to point
+    st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
     ## Apply residential multiplier
     mutate(cash_value = av_certified * 10)
 

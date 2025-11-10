@@ -7,5 +7,5 @@ rsconnect
 *.css
 *.woff
 *.min.js
-/.quarto/
-**/*.quarto_ipynb
+_book
+*.db
