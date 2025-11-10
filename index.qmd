@@ -1,0 +1,7 @@
+# Introduction
+
+This project will examine Cook County land use from several different perspectives, including taxpayers, home buyers, developers, and policy makers.
+
+The data come from [Chicago Open Data Portal](https://data.cityofchicago.org/) and the [Cook County Assessor's Office](https://github.com/ccao-data). New sources of data may be used as needed for the study.
+
+Each study will include a motivating example with some narrative thread attached so that users can see how the data might be interpreted, as well as some limitations of interpretation. Then, there will be a companion web app for users to put the analyses to their own use.
