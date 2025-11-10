@@ -116,6 +116,7 @@ ward_47_bound <-
 ##            class %in% multi_family)
 
 residential_pins <- read_csv("data/residential_pins.csv") |>
+    mutate(class = as.factor(class)) |>
     mutate(av_certified = as.numeric(av_certified))
 
 residential_pins <-
@@ -260,3 +261,5 @@ If we are otherwise pretty neutral in preferences between about Ward 40 and Ward
 ## Try It Out!
 
 I have launched a website that allows you explore this data using whichever pair of wards you would like and whichever residential categories are of interest---even several at once! Just keep in mind that these data aren't guaranteed to be accurate to current market conditions, but should give a good sense for comparison of housing stock and relative market conditions, which are much more stable than actual prices.
+
+You can check it out [here](https://charles-threlkeld-property-class-explorer.share.connect.posit.cloud/).
