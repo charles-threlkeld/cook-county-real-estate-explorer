@@ -24,6 +24,8 @@ Let's start out by asking the simple question: are taxes actually going up? The 
 #| label: fig-tax-history
 #| fig-cap: "Taxes are definitely going up, and we can see who is responsible!"
 #| warning: false
+
+## Note: Throughout this example, I will be pulling from pre-defined csv files, rather than the ptaxsim database. I do not currently have the server capacity to run the database in production, so this is a workaround for now.
 library(bslib)
 library(here)
 library(ptaxsim)
@@ -36,7 +38,10 @@ ptaxsim_db_conn <- DBI::dbConnect(
                         )
 example_pin = "13132310180000"
 
-tax_bill(year_vec = 2006:2023, pin_vec = example_pin) |>
+## bill <- tax_bill(year_vec = 2006:2023, pin_vec = example_pin)
+bill <- read_csv("data/tax_bill.csv")
+
+bill |>
     ggplot(aes(x=year, y=final_tax, fill=agency_name)) +
     geom_area() +
     scale_y_continuous(labels=scales::dollar_format()) +
@@ -63,7 +68,8 @@ But wait, while taxes are going up, property values might also be going up. We c
 #| label: fig-av-history
 #| fig-cap: "Property Value is going up too!"
 #| warning: false
-lookup_pin(2006:2023, c(example_pin)) |>
+## lookup_pin(2006:2023, c(example_pin)) |>
+read_csv("data/lookup_pin.csv") |>
     ggplot(aes(x = year, y = av * 10)) +
     geom_line() +
     scale_y_continuous(labels=scales::dollar_format()) +
@@ -85,8 +91,7 @@ $$\frac{Property Value}{Total Tax}$$
 #| label: fig-tax-rate-history
 #| fig-cap: "By seeing the rate go up, we know that taxes are going up beyond property value increases."
 #| warning: false
-tax_bill(year_vec = 2006:2023,
-         pin_vec = example_pin) |>
+bill |>
     group_by(year) |>
     summarize(total_tax = sum(final_tax),
               tax_rate = total_tax / mean(av * 10)) |>
@@ -112,10 +117,11 @@ Finally, let's look at the history of the taxes that the agencies are levying. T
 #| fig-cap: "Looks like 2014 to 2019 were driving the City of Chicago levies, and the Board of Education is growing steadily."
 #| warning: false
 
-tax_code_vec <- lookup_tax_code(2006:2023,
-                                example_pin)
-agency <- lookup_agency(2006:2023,
-                        tax_code = tax_code_vec)
+## tax_code_vec <- lookup_tax_code(2006:2023, example_pin)
+tax_code_vec <- "71001"
+## agency <- lookup_agency(2006:2023,
+##                         tax_code = tax_code_vec)
+agency <- read_csv("data/agency.csv")
 baseline <- filter(agency, year == 2006)
 
 left_join(agency, baseline,

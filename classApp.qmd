@@ -33,10 +33,15 @@ We'll go ahead and look at the data, and group it by property class:
 
 ```{r}
 #| output: false
+## Note on the data: my current hosting server cannot handle the size of
+## ptaxsim.db, so I will be working with pre-queried data. To use this code
+## with the db file, just find the commented-out queries and use them instead
+## of reading from the csvs
+
 library(bslib)
 library(here)
 library(knitr)
-library(ptaxsim)
+## library(ptaxsim)
 library(scales)
 library(shiny)
 library(sf)
@@ -71,10 +76,10 @@ classes <- read_csv(here("data/class-descriptions.csv"))
 ward_bounds <- st_read("https://data.cityofchicago.org/resource/k9yb-bpqx.geojson")
 
 ## And finally, our database, also supplied by the CCAO
-ptaxsim_db_conn <- DBI::dbConnect(
-                            RSQLite::SQLite(),
-                            here("data/ptaxsim.db")
-                        )
+## ptaxsim_db_conn <- DBI::dbConnect(
+##                             RSQLite::SQLite(),
+##                             here("data/ptaxsim.db")
+##                         )
 ```
 
 ```{r}
@@ -89,23 +94,31 @@ ward_47_bound <-
     ward_bounds |>
     filter(ward == 47)
 
-residential_pins <- DBI::dbGetQuery(
-         ptaxsim_db_conn, str_glue("
-SELECT p.year, p.pin, p.class, p.av_certified, p.tax_code_num, pg.longitude, pg.latitude
-FROM pin p
-INNER JOIN pin_geometry pg
-ON substr(p.pin, 1, 10) = pg.pin10
-AND p.year = pg.year
-WHERE substr(p.tax_code_num, 1, 1) = '7'
-AND p.year = {year}
-")
-) |>
-    ## Map lat/lon to point
-    st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
-    ## Include only residental buildings
-    filter(class %in% residential_regression |  
-           class %in% residential_nonregression |
-           class %in% multi_family) |>
+## residential_pins <- DBI::dbGetQuery(
+##          ptaxsim_db_conn, str_glue("
+## SELECT p.year, p.pin, p.class, p.av_certified, p.tax_code_num, pg.longitude, pg.latitude
+## FROM pin p
+## INNER JOIN pin_geometry pg
+## ON substr(p.pin, 1, 10) = pg.pin10
+## AND p.year = pg.year
+## WHERE substr(p.tax_code_num, 1, 1) = '7'
+## AND p.year = {year}
+## ")
+## ) |>
+##     ## Map lat/lon to point
+##     st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
+##     ## Include only residental buildings
+##     filter(class %in% residential_regression |  
+##            class %in% residential_nonregression |
+##            class %in% multi_family)
+
+residential_pins <- st_read("data/residential_pins.shp") |>
+    ## Fix the shp column name changes
+    rename(av_certified = av_crtf) |>
+    rename(tax_code_num = tx_cd_n)
+
+residential_pins <-
+    residential_pins |>
     ## Apply residential multiplier
     mutate(cash_value = av_certified * 10)
 
