@@ -9,3 +9,6 @@ rsconnect
 *.min.js
 _book
 *.db
+
+/.quarto/
+**/*.quarto_ipynb
