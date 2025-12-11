@@ -122,6 +122,8 @@ AND p.year = {year}
            .keep = "unused") |>
     mutate_at("class", as.factor)
 
+residential_pins <- read_csv(here("data/zone_pins.csv"))
+
 ```
 
 ```{r}
