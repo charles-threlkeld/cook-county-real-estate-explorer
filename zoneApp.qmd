@@ -85,7 +85,7 @@ zone_bounds <- st_read("data/chicago-zoning-2025-04-17-simple.geojson") |>
 ## ptaxsim_db_conn <- DBI::dbConnect(
 ##                             RSQLite::SQLite(),
 ##                             here("data/ptaxsim.db")
-                        )
+##                        )
 
 ############
 ## Script ##
