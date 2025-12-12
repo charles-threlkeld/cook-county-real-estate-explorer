@@ -11,9 +11,9 @@ format:
 
 ## Setting the Stage
 
-In the last two explorations, I have imagined myself to be a disgruntled, home-owning taxpayer and then a fresh-faced, prospective home-buyer. However, each of these people assumes that they just take what the market gives them. On the other side of the coin are the people creating and maintaining the housing market: Developers and policy makers.
+In the last two explorations, I have imagined myself to be a disgruntled, home-owning taxpayer and then a fresh-faced, prospective home-buyer. However, each of these people assumes that they just take what the market gives them. On the other side of the coin are the people creating and maintaining the housing market: Developers.
 
-A developer looks around for opportunities within the market. Like most business people, they are trying to buy low and sell high. In this case, that means taking low-value property and trying to turn it into high-value property. This will give us our first lens.
+A developer looks around for opportunities within the market. Like most business people, they are trying to buy low and sell high. In this case, that means taking low-value property and trying to turn it into high-value property. This will give us another lens for the housing market.
 
 ## Looking For Value
 
@@ -82,9 +82,9 @@ zone_bounds <- st_read("data/chicago-zoning-2025-04-17-simple.geojson") |>
     mutate(ZONE_CLASS = if_else(ZONE_CLASS == "RT-4.5", "RM-4.5", ZONE_CLASS))
 
 ## And finally, our database, also supplied by the CCAO
-ptaxsim_db_conn <- DBI::dbConnect(
-                            RSQLite::SQLite(),
-                            here("data/ptaxsim.db")
+## ptaxsim_db_conn <- DBI::dbConnect(
+##                             RSQLite::SQLite(),
+##                             here("data/ptaxsim.db")
                         )
 
 ############
@@ -95,34 +95,35 @@ ptaxsim_db_conn <- DBI::dbConnect(
 ## Chicago PINs and their centroids
 ## See https://ccao-data.github.io/ptaxsim/articles/mapping.html
 ## For the source of this shortcut
-residential_pins <- DBI::dbGetQuery(
-         ptaxsim_db_conn, str_glue("
-SELECT p.year, p.pin, p.class, p.av_certified, p.tax_code_num, pg.longitude, pg.latitude
-FROM pin p
-INNER JOIN pin_geometry pg
-ON substr(p.pin, 1, 10) = pg.pin10
-AND p.year = pg.year
-WHERE substr(p.tax_code_num, 1, 1) = '7'
-AND p.year = {year}
-")
-) |>
-    ## Map lat/lon to point
-    st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
-    ## Include only residental buildings
-    filter(class %in% residential_regression |  
-           class %in% residential_nonregression |
-           class %in% multi_family) |>
-    st_join(ward_bounds, st_within) |>  ## Add ward info
-    st_join(zone_bounds) |>  ## Add zoning info
-    st_drop_geometry() |>
-    as_tibble() |>
-    select(ZONE_CLASS, pin, class, av_certified, ward) |>
-    mutate(zone = ZONE_CLASS, 
-           cash_value = av_certified * 10,
-           .keep = "unused") |>
-    mutate_at("class", as.factor)
+## residential_pins <- DBI::dbGetQuery(
+##          ptaxsim_db_conn, str_glue("
+## SELECT p.year, p.pin, p.class, p.av_certified, p.tax_code_num, pg.longitude, pg.latitude
+## FROM pin p
+## INNER JOIN pin_geometry pg
+## ON substr(p.pin, 1, 10) = pg.pin10
+## AND p.year = pg.year
+## WHERE substr(p.tax_code_num, 1, 1) = '7'
+## AND p.year = {year}
+## ")
+## ) |>
+##     ## Map lat/lon to point
+##     st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
+##     ## Include only residental buildings
+##     filter(class %in% residential_regression |  
+##            class %in% residential_nonregression |
+##            class %in% multi_family) |>
+##     st_join(ward_bounds, st_within) |>  ## Add ward info
+##     st_join(zone_bounds) |>  ## Add zoning info
+##     st_drop_geometry() |>
+##     as_tibble() |>
+##     select(ZONE_CLASS, pin, class, av_certified, ward) |>
+##     mutate(zone = ZONE_CLASS, 
+##            cash_value = av_certified * 10,
+##            .keep = "unused") |>
+##    mutate_at("class", as.factor)
 
-residential_pins <- read_csv(here("data/zone_pins.csv"))
+residential_pins <- read_csv(here("data/zone_pins.csv")) |>
+    mutate_at("class", as.factor)
 
 ```
 
@@ -226,6 +227,7 @@ Finally, let's make sure that these types of units are readily available in the 
 #| output: true
 residential_pins |>
     filter(ward == 47) |>
+    filter(zone == "RS-3") |>
     filter(class %in% c(202, 203, 207, 208, 211, 278, 299)) |>
     select(class, pin, class, cash_value) |>
     mutate(class = fct_collapse(class,
