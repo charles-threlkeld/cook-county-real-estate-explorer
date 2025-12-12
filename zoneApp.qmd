@@ -166,7 +166,10 @@ residential_pins |>
     stat_summary(fun=mean, geom="point", shape=0, size=2, color="red") +
     stat_summary(fun=median, geom="point", shape=2, size=2, color="blue") +
     scale_x_continuous("Fair Cash Value",
-                       labels = label_currency(prefix="$"))
+                       labels = label_currency(prefix="$")) +
+    labs(
+        title = "Property Value: Two-Flat vs 2+ Story Single Family",
+        y = "Property Type")
 ```
 
 Wow! So much for our hypothesis that a two-flat brings more money to the buyer's side of the transaction. Even if single family were more expensive to build, in this section of town, it would still be the way to go. The bulk of single family homes are valued at well over a million dollars, with some going above two million. For two-flats, one million looks more like a soft cap, with prices rarely stretching over one million. In fact, at the median and mean (blue triangles and red squares) a single family property demands a roughly $500,000 premium over a two-flat.
@@ -189,7 +192,10 @@ residential_pins |>
     stat_summary(fun=mean, geom="point", shape=0, size=2, color="red") +
     stat_summary(fun=median, geom="point", shape=2, size=2, color="blue") +
     scale_x_continuous("Fair Cash Value",
-                       labels = label_currency(prefix="$"))
+                       labels = label_currency(prefix="$")) +
+    labs(
+        title = "Property Value: Two-Flat vs Single Story Single Family",
+        y = "Property Type")
 ```
 
 This shows that the advantage of owning a whole second unit is basically totally offset by the premium demanded for not sharing the space. That is, in the market, people are willing to pay as much for a house to themselves as they are for *two whole units* of space that shares a floor/ceiling.
@@ -214,7 +220,10 @@ residential_pins |>
     stat_summary(fun=mean, geom="point", shape=0, size=2, color="red") +
     stat_summary(fun=median, geom="point", shape=2, size=2, color="blue") +
     scale_x_continuous("Fair Cash Value",
-                       labels = label_currency(prefix="$"))
+                       labels = label_currency(prefix="$")) +
+    labs(
+        title = "Property Value: Two-Flat vs Condominium",
+        y = "Property Type")
 ```
 
 Alright, that checks that box. Keep in mind that a condominium is a single unit and a two-flat is two units, so if one were to build and sell a two-flat with condominium ownership (that is, sell to two different owners with a co-ownership agreement of the shared spaces rather than sell to a single owner who would rent), there are two sales that happen. So, a single condominium averages around $250,000, and so two would average around $500,000. The price premium of a two-flat up to nearly $750,000 likely shows the premium of space, rather than ownership structure.

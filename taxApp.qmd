@@ -100,7 +100,8 @@ bill |>
     scale_y_continuous(label = scales::label_percent()) +
     labs(
         x = "Year",
-        y = "Tax Collected as Percent of Assessed Value") +
+        y = "Tax Collected as Percent of Assessed Value",
+        title = "Tax Rate History") +
     theme(legend.position = "bottom")
 ```
 
@@ -134,7 +135,8 @@ left_join(agency, baseline,
     scale_y_continuous(label = scales::label_percent()) +
     labs(
         x = "Year",
-        y = "% of Tax Dollars Collected vs 2006")
+        y = "% of Tax Dollars Collected vs 2006",
+        title = "Agency Levy History (Relative to 2006)")
 ```
 
 Note that these are the *total* levies of these agencies for each year. They are not specific to our property any more. But, we refer back to @fig-tax-history and see that two of the biggest contributors to the tax bill are the Board of Education and the City of Chicago. Here, we can see that the Board of Education has been growing fairly steadily for nearly 20 years. The City of Chicago hit something in 2015 that really spiked levies and it has been growing somewhat steadily since then. 
