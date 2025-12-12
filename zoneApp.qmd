@@ -138,7 +138,7 @@ residential_pins |>
     summarize(n = n()) |>
     arrange(desc(n)) |>
     head(n = 5) |>
-    left_join(zoning_code_summary, keep = FALSE) |>
+    left_join(zoning_code_summary, keep = FALSE, by = join_by(zone)) |>
     kable()
 ```
 
@@ -163,8 +163,8 @@ residential_pins |>
     mutate(type = ifelse(class == 211, "Two-Flat", "2+ Story Single Family"), .keep = "unused") |>
     ggplot(aes(x = cash_value, y = type)) +
     geom_violin(trim = FALSE) +
-    stat_summary(fun.y=mean, geom="point", shape=0, size=2, color="red") +
-    stat_summary(fun.y=median, geom="point", shape=2, size=2, color="blue") +
+    stat_summary(fun=mean, geom="point", shape=0, size=2, color="red") +
+    stat_summary(fun=median, geom="point", shape=2, size=2, color="blue") +
     scale_x_continuous("Fair Cash Value",
                        labels = label_currency(prefix="$"))
 ```
@@ -186,8 +186,8 @@ residential_pins |>
     mutate(type = ifelse(class == 211, "Two-Flat", "Single Story Single Family"), .keep = "unused") |>
     ggplot(aes(x = cash_value, y = type)) +
     geom_violin(trim = FALSE) +
-    stat_summary(fun.y=mean, geom="point", shape=0, size=2, color="red") +
-    stat_summary(fun.y=median, geom="point", shape=2, size=2, color="blue") +
+    stat_summary(fun=mean, geom="point", shape=0, size=2, color="red") +
+    stat_summary(fun=median, geom="point", shape=2, size=2, color="blue") +
     scale_x_continuous("Fair Cash Value",
                        labels = label_currency(prefix="$"))
 ```
@@ -211,8 +211,8 @@ residential_pins |>
     mutate(type = ifelse(class == 211, "Two Flat", "Condominium"), .keep = "unused") |>
     ggplot(aes(x = cash_value, y = type)) +
     geom_violin(trim = FALSE) +
-    stat_summary(fun.y=mean, geom="point", shape=0, size=2, color="red") +
-    stat_summary(fun.y=median, geom="point", shape=2, size=2, color="blue") +
+    stat_summary(fun=mean, geom="point", shape=0, size=2, color="red") +
+    stat_summary(fun=median, geom="point", shape=2, size=2, color="blue") +
     scale_x_continuous("Fair Cash Value",
                        labels = label_currency(prefix="$"))
 ```
