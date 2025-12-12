@@ -9,6 +9,7 @@ book:
     - index.qmd
     - taxApp.qmd
     - classApp.qmd
+    - zoneApp.qmd
 
 bibliography: references.bib
 
