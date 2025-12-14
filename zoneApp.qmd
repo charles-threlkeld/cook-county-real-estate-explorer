@@ -17,7 +17,7 @@ A developer looks around for opportunities within the market. Like most business
 
 ## Looking For Value
 
-As a developer, we want to know what opportunities are available so that we can specialize. If we want to work in a location that only allows single-family homes, strip-mall specialization does not make much sense. Walking around can usually give us a pretty good idea, but let's try to be a little more objective and turn this into a quantitative question: What are the five most common zoning types in my ward and how many plots are there for each zone?
+As a developer, we want to know what opportunities are available so that we can specialize. If we want to work in a location that only allows single-family homes, strip-mall specialization does not make much sense. Walking around can usually give us a pretty good idea, but let's try to be a little more objective and turn this into a quantitative question: What are the five most common zoning types in my neighborhood and how many plots are there for each zone?
 
 ```{r}
 #| output: false
@@ -25,7 +25,7 @@ library(bslib)
 library(forcats)
 library(here)
 library(knitr)
-#library(ptaxsim)
+library(ptaxsim)
 library(scales)
 library(shiny)
 library(sf)
@@ -56,8 +56,10 @@ year = 2023
 classes <- read_csv(here("data/class-descriptions.csv")) |>
     mutate_at(c("class"), as.factor)
 
-## We grab the ward bounds from the City Data Portal
-ward_bounds <- st_read("https://data.cityofchicago.org/resource/k9yb-bpqx.geojson")
+## Alternatively, I could look at ward data, since that is a political
+## area, and zoning codes are set by policy makers.
+## Grab the ward bounds from the City Data Portal
+## ward_bounds <- st_read("https://data.cityofchicago.org/resource/k9yb-bpqx.geojson")
 
 ## Zoning code summary from
 ## https://secondcityzoning.org/resources/import/zoning-code-summary-district-types.csv
@@ -81,11 +83,15 @@ zone_bounds <- st_read("data/chicago-zoning-2025-04-17-simple.geojson") |>
     mutate(ZONE_CLASS = if_else(ZONE_CLASS == "RM5.5", "RM-5.5", ZONE_CLASS)) |>
     mutate(ZONE_CLASS = if_else(ZONE_CLASS == "RT-4.5", "RM-4.5", ZONE_CLASS))
 
+neighborhood_bounds <- st_read("https://data.cityofchicago.org/resource/y6yq-dbs2.geojson")
+
+municipality_bounds <- st_read("data/Municipality.geojson")
+
 ## And finally, our database, also supplied by the CCAO
-## ptaxsim_db_conn <- DBI::dbConnect(
-##                             RSQLite::SQLite(),
-##                             here("data/ptaxsim.db")
-##                        )
+ptaxsim_db_conn <- DBI::dbConnect(
+                            RSQLite::SQLite(),
+                            here("data/ptaxsim.db")
+                       )
 
 ############
 ## Script ##
@@ -95,36 +101,38 @@ zone_bounds <- st_read("data/chicago-zoning-2025-04-17-simple.geojson") |>
 ## Chicago PINs and their centroids
 ## See https://ccao-data.github.io/ptaxsim/articles/mapping.html
 ## For the source of this shortcut
-## residential_pins <- DBI::dbGetQuery(
-##          ptaxsim_db_conn, str_glue("
-## SELECT p.year, p.pin, p.class, p.av_certified, p.tax_code_num, pg.longitude, pg.latitude
-## FROM pin p
-## INNER JOIN pin_geometry pg
-## ON substr(p.pin, 1, 10) = pg.pin10
-## AND p.year = pg.year
-## WHERE substr(p.tax_code_num, 1, 1) = '7'
-## AND p.year = {year}
-## ")
-## ) |>
-##     ## Map lat/lon to point
-##     st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
-##     ## Include only residental buildings
-##     filter(class %in% residential_regression |  
-##            class %in% residential_nonregression |
-##            class %in% multi_family) |>
-##     st_join(ward_bounds, st_within) |>  ## Add ward info
-##     st_join(zone_bounds) |>  ## Add zoning info
-##     st_drop_geometry() |>
-##     as_tibble() |>
-##     select(ZONE_CLASS, pin, class, av_certified, ward) |>
-##     mutate(zone = ZONE_CLASS, 
-##            cash_value = av_certified * 10,
-##            .keep = "unused") |>
-##    mutate_at("class", as.factor)
+residential_pins <- DBI::dbGetQuery(
+         ptaxsim_db_conn, str_glue("
+SELECT p.year, p.pin, p.class, p.av_certified, pg.longitude, pg.latitude
+FROM pin p
+INNER JOIN pin_geometry pg
+ON substr(p.pin, 1, 10) = pg.pin10
+AND p.year = pg.year
+WHERE p.year = {year}
+")
+) |>
+    ## Map lat/lon to point
+    st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
+    ## Include only residental buildings
+    filter(class %in% residential_regression |  
+           class %in% residential_nonregression |
+           class %in% multi_family) |>
+    ## st_join(ward_bounds, st_within) |>  ## Add ward info
+    st_join(zone_bounds, st_within) |>  ## Add zoning info
+    st_join(neighborhood_bounds, st_within) |>
+    st_join(municipality_bounds, st_within) |>
+    st_drop_geometry() |>
+    as_tibble() |>
+    ## select(ZONE_CLASS, pin, class, av_certified, ward, pri_neigh, MUNICIPALITY) |>
+    select(ZONE_CLASS, pin, class, av_certified, pri_neigh, MUNICIPALITY) |>
+    mutate(zone = ZONE_CLASS, 
+           cash_value = av_certified * 10,
+           location = ifelse(is.na(pri_neigh), MUNICIPALITY, pri_neigh),
+           .keep = "unused") |>
+   mutate_at("class", as.factor)
 
-residential_pins <- read_csv(here("data/zone_pins.csv")) |>
+residential_pins2 <- read_csv(here("cook-county-real-estate-explorer/data/zone_pins.csv")) |>
     mutate_at("class", as.factor)
-
 ```
 
 ```{r}
@@ -132,7 +140,7 @@ residential_pins <- read_csv(here("data/zone_pins.csv")) |>
 #| tbl-cap: "Specializing in single family homes and/or two-flats looks like a pretty good idea."
 #| output: true
 residential_pins |>
-    filter(ward == 47) |>
+    filter(location == "Lincoln Square") |>
     select(zone, pin, class, cash_value) |>
     group_by(zone) |>
     summarize(n = n()) |>
@@ -142,7 +150,7 @@ residential_pins |>
     kable()
 ```
 
-Here in Ward 47, there are overwhelmingly more RS-3 zoned plots than anything else---nine times more than second-place RT-4! And looking at the rest of this abbreviated list, three of the four runner-up zones show some overlap by including single family, two-flat, or both. So, it looks like it's a good idea to specialize in building two-flats and/or single family.
+Here in Lincoln Square, there are overwhelmingly more RS-3 zoned plots than anything else---nine times more than second-place RT-4! And looking at the rest of this abbreviated list, three of the four runner-up zones show some overlap by including single family, two-flat, or both. So, it looks like it's a good idea to specialize in building two-flats and/or single family.
 
 But which one makes more sense for the business?
 
@@ -158,7 +166,7 @@ So, let's see how this plays out in the data. Looking at the most popular zoning
 #| output: true
 residential_pins |>
     filter(zone == "RS-3") |>
-    filter(ward == 47) |>
+    filter(location == "Lincoln Square") |>
     filter(class %in% c(207, 208, 211, 278)) |>
     mutate(type = ifelse(class == 211, "Two-Flat", "2+ Story Single Family"), .keep = "unused") |>
     ggplot(aes(x = cash_value, y = type)) +
@@ -184,7 +192,7 @@ But wait, maybe we are comparing apples to oranges here. For an owner-occupied t
 #| output: true
 residential_pins |>
     filter(zone == "RS-3") |>
-    filter(ward == 47) |>
+    filter(location == "Lincoln Square") |>
     filter(class %in% c(202, 203, 204, 211)) |>
     mutate(type = ifelse(class == 211, "Two-Flat", "Single Story Single Family"), .keep = "unused") |>
     ggplot(aes(x = cash_value, y = type)) +
@@ -212,7 +220,7 @@ To check ownership structure, we'll want an apples-to-apples comparison for a tw
 #| output: true
 residential_pins |>
     filter(zone == "RS-3") |>
-    filter(ward == 47) |>
+    filter(location == "Lincoln Square") |>
     filter(class %in% c(211, 299)) |>
     mutate(type = ifelse(class == 211, "Two Flat", "Condominium"), .keep = "unused") |>
     ggplot(aes(x = cash_value, y = type)) +
@@ -228,14 +236,14 @@ residential_pins |>
 
 Alright, that checks that box. Keep in mind that a condominium is a single unit and a two-flat is two units, so if one were to build and sell a two-flat with condominium ownership (that is, sell to two different owners with a co-ownership agreement of the shared spaces rather than sell to a single owner who would rent), there are two sales that happen. So, a single condominium averages around $250,000, and so two would average around $500,000. The price premium of a two-flat up to nearly $750,000 likely shows the premium of space, rather than ownership structure.
 
-Finally, let's make sure that these types of units are readily available in the ward.
+Finally, let's make sure that these types of units are readily available in the neighborhood.
 
 ```{r}
 #| label: tbl-class-count
 #| tbl-cap: "There is currently a pretty good mix, and developers are incentivized to take it all upscale."
 #| output: true
 residential_pins |>
-    filter(ward == 47) |>
+    filter(location == "Lincoln Square") |>
     filter(zone == "RS-3") |>
     filter(class %in% c(202, 203, 207, 208, 211, 278, 299)) |>
     select(class, pin, class, cash_value) |>
