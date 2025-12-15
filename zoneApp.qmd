@@ -25,7 +25,7 @@ library(bslib)
 library(forcats)
 library(here)
 library(knitr)
-library(ptaxsim)
+# library(ptaxsim)
 library(scales)
 library(shiny)
 library(sf)
@@ -101,37 +101,39 @@ ptaxsim_db_conn <- DBI::dbConnect(
 ## Chicago PINs and their centroids
 ## See https://ccao-data.github.io/ptaxsim/articles/mapping.html
 ## For the source of this shortcut
-residential_pins <- DBI::dbGetQuery(
-         ptaxsim_db_conn, str_glue("
-SELECT p.year, p.pin, p.class, p.av_certified, pg.longitude, pg.latitude
-FROM pin p
-INNER JOIN pin_geometry pg
-ON substr(p.pin, 1, 10) = pg.pin10
-AND p.year = pg.year
-WHERE p.year = {year}
-")
-) |>
-    ## Map lat/lon to point
-    st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
-    ## Include only residental buildings
-    filter(class %in% residential_regression |  
-           class %in% residential_nonregression |
-           class %in% multi_family) |>
-    ## st_join(ward_bounds, st_within) |>  ## Add ward info
-    st_join(zone_bounds, st_within) |>  ## Add zoning info
-    st_join(neighborhood_bounds, st_within) |>
-    st_join(municipality_bounds, st_within) |>
-    st_drop_geometry() |>
-    as_tibble() |>
-    ## select(ZONE_CLASS, pin, class, av_certified, ward, pri_neigh, MUNICIPALITY) |>
-    select(ZONE_CLASS, pin, class, av_certified, pri_neigh, MUNICIPALITY) |>
-    mutate(zone = ZONE_CLASS, 
-           cash_value = av_certified * 10,
-           location = ifelse(is.na(pri_neigh), MUNICIPALITY, pri_neigh),
-           .keep = "unused") |>
-   mutate_at("class", as.factor)
+## residential_pins <- DBI::dbGetQuery(
+##          ptaxsim_db_conn, str_glue("
+## SELECT p.year, p.pin, p.class, p.av_certified, pg.longitude, pg.latitude
+## FROM pin p
+## INNER JOIN pin_geometry pg
+## ON substr(p.pin, 1, 10) = pg.pin10
+## AND p.year = pg.year
+## WHERE p.year = {year}
+## ")
+## ) |>
+##     ## Map lat/lon to point
+##     st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
+##     ## Include only residental buildings
+##     filter(class %in% residential_regression |  
+##            class %in% residential_nonregression |
+##            class %in% multi_family) |>
+##     ## st_join(ward_bounds, st_within) |>  ## Add ward info
+##     st_join(zone_bounds, st_within) |>  ## Add zoning info
+##     st_join(neighborhood_bounds, st_within) |>
+##     st_join(municipality_bounds, st_within) |>
+##     st_drop_geometry() |>
+##     as_tibble() |>
+##     ## select(ZONE_CLASS, pin, class, av_certified, ward, pri_neigh, MUNICIPALITY) |>
+##     select(ZONE_CLASS, class, av_certified, pri_neigh, MUNICIPALITY) |>
+##     mutate(zone = ZONE_CLASS, 
+##            cash_value = av_certified * 10,
+##            location = ifelse(is.na(pri_neigh), MUNICIPALITY, pri_neigh),
+##            .keep = "unused") |>
+##     mutate_at("class", as.factor)
 
-residential_pins2 <- read_csv(here("cook-county-real-estate-explorer/data/zone_pins.csv")) |>
+## write_csv(residential_pins, "data/zoning_pins.csv")
+
+residential_pins <- read_csv(here("data/zoning_pins.csv")) |>
     mutate_at("class", as.factor)
 ```
 
@@ -141,7 +143,6 @@ residential_pins2 <- read_csv(here("cook-county-real-estate-explorer/data/zone_p
 #| output: true
 residential_pins |>
     filter(location == "Lincoln Square") |>
-    select(zone, pin, class, cash_value) |>
     group_by(zone) |>
     summarize(n = n()) |>
     arrange(desc(n)) |>
@@ -246,7 +247,6 @@ residential_pins |>
     filter(location == "Lincoln Square") |>
     filter(zone == "RS-3") |>
     filter(class %in% c(202, 203, 207, 208, 211, 278, 299)) |>
-    select(class, pin, class, cash_value) |>
     mutate(class = fct_collapse(class,
                                 "1 Story Single Family" = c(202, 203),
                                 "2+ Story Single Family" = c(207, 208, 278),
